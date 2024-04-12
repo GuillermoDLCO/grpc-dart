@@ -380,7 +380,7 @@ class ClientCall<Q, R> implements Response {
         return;
       }
       if (_trailers.isCompleted) {
-        _responseError(GrpcError.unimplemented('Received multiple trailers'));
+        // _responseError(GrpcError.unimplemented('Received multiple trailers'));
         return;
       }
       final metadata = data.metadata;
@@ -413,20 +413,20 @@ class ClientCall<Q, R> implements Response {
       _responseError(GrpcError.unavailable('Did not receive anything'));
       return;
     }
-    // if (!_trailers.isCompleted) {
-    //   if (_hasReceivedResponses) {
-    //     // Trailers are required after receiving data.
-    //     _responseError(GrpcError.unavailable('Missing trailers'));
-    //     return;
-    //   }
+    if (!_trailers.isCompleted) {
+      if (_hasReceivedResponses) {
+        // Trailers are required after receiving data.
+        _responseError(GrpcError.unavailable('Missing trailers'));
+        return;
+      }
 
-    //   // Only received a header frame and no data frames, so the header
-    //   // should contain "trailers" as well (Trailers-Only).
-    //   _trailers.complete(_headerMetadata);
+      // Only received a header frame and no data frames, so the header
+      // should contain "trailers" as well (Trailers-Only).
+      _trailers.complete(_headerMetadata);
 
-    //   /// Process status error if necessary
-    //   _checkForErrorStatus(_headerMetadata);
-    // }
+      /// Process status error if necessary
+      _checkForErrorStatus(_headerMetadata);
+    }
     _responseTimeline?.finish();
     _timeoutTimer?.cancel();
     _responses.close();
