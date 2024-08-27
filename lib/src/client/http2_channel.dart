@@ -46,7 +46,8 @@ class ClientChannel extends ClientChannelBase {
 
   @override
   ClientConnection createConnection() =>
-      Http2ClientConnection(host, port, options, prefixPath: '/$prefixPath');
+      Http2ClientConnection(host, port, options,
+          prefixPath: '${prefixPath.isEmpty ? '' : '/'}$prefixPath');
 }
 
 class ClientTransportConnectorChannel extends ClientChannelBase {
