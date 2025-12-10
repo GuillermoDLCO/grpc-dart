@@ -36,7 +36,9 @@ class EchoService extends EchoServiceBase {
 
   @override
   Stream<ServerStreamingEchoResponse> serverStreamingEcho(
-      ServiceCall call, ServerStreamingEchoRequest request) async* {
+    ServiceCall call,
+    ServerStreamingEchoRequest request,
+  ) async* {
     for (var i = 0; i < request.messageCount; i++) {
       yield ServerStreamingEchoResponse()..message = request.message;
       if (i < request.messageCount - 1) {
@@ -81,8 +83,14 @@ static_resources:
                 expose_headers: custom-header-1,grpc-status,grpc-message
           http_filters:
           - name: envoy.filters.http.grpc_web
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
           - name: envoy.filters.http.cors
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
           - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
   clusters:
   - name: echo_service
     connect_timeout: 0.25s
@@ -126,7 +134,8 @@ Future<void> hybridMain(StreamChannel channel) async {
   final tempDir = await Directory.systemTemp.createTemp();
   final config = p.join(tempDir.path, 'config.yaml');
   await File(config).writeAsString(
-      envoyConfig.replaceAll('%TARGET_PORT%', server.port.toString()));
+    envoyConfig.replaceAll('%TARGET_PORT%', server.port.toString()),
+  );
 
   // Spawn a proxy that would translate gRPC-web protocol into gRPC protocol
   // for us. We use envoy proxy. See CONTRIBUTING.md for setup.
@@ -146,24 +155,25 @@ if you are running tests locally.
 
   // Parse output of the proxy process looking for a port it selected.
   final portRe = RegExp(
-      r'Set listener listener_0 socket factory local address to 0.0.0.0:(\d+)');
+    r'Set listener listener_0 socket factory local address to 0.0.0.0:(\d+)',
+  );
 
-  proxy.stderr
-      .transform(utf8.decoder)
-      .transform(const LineSplitter())
-      .listen((line) {
+  proxy.stderr.transform(utf8.decoder).transform(const LineSplitter()).listen((
+    line,
+  ) {
     _info('envoy|stderr] $line');
     final m = portRe.firstMatch(line);
     if (m != null) {
-      channel.sink
-          .add({'grpcPort': int.parse(m[1]!), 'httpPort': httpServer.port});
+      channel.sink.add({
+        'grpcPort': int.parse(m[1]!),
+        'httpPort': httpServer.port,
+      });
     }
   });
 
-  proxy.stdout
-      .transform(utf8.decoder)
-      .transform(const LineSplitter())
-      .listen((line) {
+  proxy.stdout.transform(utf8.decoder).transform(const LineSplitter()).listen((
+    line,
+  ) {
     _info('envoy|stdout] $line');
   });
 
@@ -222,9 +232,11 @@ Future<HttpServer> startHttpServer() async {
   server.defaultResponseHeaders.add('Access-Control-Allow-Origin', '*');
   server.listen((request) async {
     _info('${request.method} ${request.requestedUri} ${request.headers}');
-    final message = await GrpcHttpDecoder()
-        .bind(request.map((list) => DataStreamMessage(list)))
-        .first as GrpcData;
+    final message =
+        await GrpcHttpDecoder()
+                .bind(request.map((list) => DataStreamMessage(list)))
+                .first
+            as GrpcData;
     final echoRequest = EchoRequest.fromBuffer(message.data);
     (testCases[echoRequest.message] ?? defaultHandler)(request.response);
   });

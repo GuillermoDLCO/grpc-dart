@@ -14,8 +14,7 @@
 // limitations under the License.
 
 import 'dart:async';
-import 'dart:html';
-
+import 'package:web/web.dart';
 import 'src/generated/echo.pbgrpc.dart';
 
 class EchoApp {
@@ -40,11 +39,17 @@ class EchoApp {
       ..message = message
       ..messageCount = count
       ..messageInterval = 500;
-    _service.serverStreamingEcho(request).listen((response) {
-      _addRightMessage(response.message);
-    }, onError: (error) {
-      _addRightMessage(error.toString());
-    }, onDone: () => print('Closed connection to server.'));
+    _service
+        .serverStreamingEcho(request)
+        .listen(
+          (response) {
+            _addRightMessage(response.message);
+          },
+          onError: (error) {
+            _addRightMessage(error.toString());
+          },
+          onDone: () => print('Closed connection to server.'),
+        );
   }
 
   void _addLeftMessage(String message) {
@@ -56,13 +61,30 @@ class EchoApp {
   }
 
   void _addMessage(String message, String cssClass) {
+    document
+        .querySelector('#first')!
+        .after(
+          HTMLDivElement()
+            ..classList.add('row')
+            ..append(
+              HTMLHeadingElement.h2()..append(
+                HTMLSpanElement()
+                  ..classList.add('label')
+                  ..classList.addAll(cssClass)
+                  ..textContent = message,
+              ),
+            ),
+        );
+  }
+}
+
+// The documentation of DOMTokenList.add implies it can handle multiple classes,
+// but in Chrome at least it does not.
+extension AddAll on DOMTokenList {
+  void addAll(String cssClass) {
     final classes = cssClass.split(' ');
-    querySelector('#first')!.after(DivElement()
-      ..classes.add('row')
-      ..append(Element.tag('h2')
-        ..append(SpanElement()
-          ..classes.add('label')
-          ..classes.addAll(classes)
-          ..text = message)));
+    for (final c in classes) {
+      add(c);
+    }
   }
 }

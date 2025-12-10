@@ -14,7 +14,7 @@
 // limitations under the License.
 
 import 'src/client/grpc_or_grpcweb_channel_grpc.dart'
-    if (dart.library.html) 'src/client/grpc_or_grpcweb_channel_web.dart';
+    if (dart.library.js_interop) 'src/client/grpc_or_grpcweb_channel_web.dart';
 import 'src/client/http2_channel.dart';
 import 'src/client/options.dart';
 
@@ -48,23 +48,20 @@ class GrpcOrGrpcWebClientChannel extends GrpcOrGrpcWebClientChannelInternal {
     required super.grpcTransportSecure,
     required super.grpcWebPort,
     required super.grpcWebTransportSecure,
-  }) : super(
-          grpcHost: host,
-          grpcWebHost: host,
-        );
+  }) : super(grpcHost: host, grpcWebHost: host);
 
   GrpcOrGrpcWebClientChannel.toSingleEndpoint({
     required String host,
     required int port,
     required bool transportSecure,
   }) : super(
-          grpcHost: host,
-          grpcPort: port,
-          grpcTransportSecure: transportSecure,
-          grpcWebHost: host,
-          grpcWebPort: port,
-          grpcWebTransportSecure: transportSecure,
-        );
+         grpcHost: host,
+         grpcPort: port,
+         grpcTransportSecure: transportSecure,
+         grpcWebHost: host,
+         grpcWebPort: port,
+         grpcWebTransportSecure: transportSecure,
+       );
 
   GrpcOrGrpcWebClientChannel.grpc(
     super.host, {

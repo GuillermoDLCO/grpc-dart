@@ -32,16 +32,20 @@ void main() {
   late EchoServiceClient fakeClient;
   late FakeClientChannel fakeChannel;
   late EchoServiceClient unresponsiveClient;
-  late ClientChannel unresponsiveChannel;
+  late FakeClientChannel unresponsiveChannel;
+
+  final pingInterval = Duration(milliseconds: 10);
+  final timeout = Duration(milliseconds: 30);
+  final maxBadPings = 5;
 
   setUp(() async {
     final serverOptions = ServerKeepAliveOptions(
-      maxBadPings: 5,
+      maxBadPings: maxBadPings,
       minIntervalBetweenPingsWithoutData: Duration(milliseconds: 10),
     );
     final clientOptions = ClientKeepAliveOptions(
-      pingInterval: Duration(milliseconds: 10),
-      timeout: Duration(milliseconds: 30),
+      pingInterval: pingInterval,
+      timeout: timeout,
       permitWithoutCalls: true,
     );
 
@@ -49,7 +53,7 @@ void main() {
       services: [FakeEchoService()],
       keepAliveOptions: serverOptions,
     );
-    await server.serve(address: 'localhost', port: 8081);
+    await server.serve(address: 'localhost', port: 0);
     fakeChannel = FakeClientChannel(
       'localhost',
       port: server.port!,
@@ -76,36 +80,46 @@ void main() {
     await server.shutdown();
   });
 
-  test('Server terminates connection after too many pings without data',
-      () async {
-    await fakeClient.echo(EchoRequest());
-    await Future.delayed(Duration(milliseconds: 300));
-    await fakeClient.echo(EchoRequest());
-    // Check that the server closed the connection, the next request then has
-    // to build a new one.
-    expect(fakeChannel.newConnectionCounter, 2);
-  });
+  test(
+    'Server terminates connection after too many pings without data',
+    () async {
+      await fakeClient.echo(EchoRequest());
+      await Future.delayed(timeout * maxBadPings * 2);
+      await fakeClient.echo(EchoRequest());
+      // Check that the server closed the connection, the next request then has
+      // to build a new one.
+      expect(fakeChannel.newConnectionCounter, 2);
+    },
+  );
 
-  test('Server doesnt terminate connection after pings, as data is sent',
-      () async {
-    final timer = Timer.periodic(
-        Duration(milliseconds: 10), (timer) => fakeClient.echo(EchoRequest()));
-    await Future.delayed(Duration(milliseconds: 200), () => timer.cancel());
+  test(
+    'Server doesnt terminate connection after pings, as data is sent',
+    () async {
+      for (var i = 0; i < 10; i++) {
+        await fakeClient.echo(EchoRequest());
+        await Future.delayed(timeout * 0.2);
+      }
 
-    // Wait for last request to be sent
-    await Future.delayed(Duration(milliseconds: 20));
+      // Check that the server never closed the connection
+      expect(fakeChannel.newConnectionCounter, 1);
+    },
+  );
 
-    // Check that the server never closed the connection
-    expect(fakeChannel.newConnectionCounter, 1);
-  });
+  test(
+    'Server doesnt ack the ping, making the client shutdown the transport',
+    () async {
+      //Send a first request, get a connection
+      await unresponsiveClient.echo(EchoRequest());
+      expect(unresponsiveChannel.newConnectionCounter, 1);
 
-  test('Server doesnt ack the ping, making the client shutdown the connection',
-      () async {
-    await unresponsiveClient.echo(EchoRequest());
-    await Future.delayed(Duration(milliseconds: 200));
-    await expectLater(
-        unresponsiveClient.echo(EchoRequest()), throwsA(isA<GrpcError>()));
-  });
+      //Ping is not being acked on time
+      await Future.delayed(timeout * 2);
+
+      //A second request gets a new connection
+      await unresponsiveClient.echo(EchoRequest());
+      expect(unresponsiveChannel.newConnectionCounter, 2);
+    },
+  );
 }
 
 /// A wrapper around a [FakeHttp2ClientConnection]
@@ -113,7 +127,7 @@ class FakeClientChannel extends ClientChannel {
   FakeHttp2ClientConnection? fakeHttp2ClientConnection;
   FakeClientChannel(
     super.host, {
-    super.port = 443,
+    super.port,
     super.options = const ChannelOptions(),
     super.channelShutdownHandler,
   });
@@ -142,20 +156,26 @@ class FakeHttp2ClientConnection extends Http2ClientConnection {
 }
 
 /// A wrapper around a [FakeHttp2ClientConnection]
-class UnresponsiveClientChannel extends ClientChannel {
+class UnresponsiveClientChannel extends FakeClientChannel {
   UnresponsiveClientChannel(
     super.host, {
-    super.port = 443,
+    super.port,
     super.options = const ChannelOptions(),
     super.channelShutdownHandler,
   });
 
   @override
-  ClientConnection createConnection() =>
-      UnresponsiveHttp2ClientConnection(host, port, options);
+  ClientConnection createConnection() {
+    fakeHttp2ClientConnection = UnresponsiveHttp2ClientConnection(
+      host,
+      port,
+      options,
+    );
+    return fakeHttp2ClientConnection!;
+  }
 }
 
-class UnresponsiveHttp2ClientConnection extends Http2ClientConnection {
+class UnresponsiveHttp2ClientConnection extends FakeHttp2ClientConnection {
   UnresponsiveHttp2ClientConnection(super.host, super.port, super.options);
 
   @override
@@ -171,10 +191,11 @@ class UnresponsiveHttp2ClientConnection extends Http2ClientConnection {
 }
 
 class FakeClientKeepAlive extends ClientKeepAlive {
-  FakeClientKeepAlive(
-      {required super.options,
-      required super.ping,
-      required super.onPingTimeout});
+  FakeClientKeepAlive({
+    required super.options,
+    required super.ping,
+    required super.onPingTimeout,
+  });
 
   @override
   void onFrameReceived() {
@@ -189,8 +210,7 @@ class FakeEchoService extends EchoServiceBase {
 
   @override
   Stream<ServerStreamingEchoResponse> serverStreamingEcho(
-      ServiceCall call, ServerStreamingEchoRequest request) {
-    // TODO: implement serverStreamingEcho
-    throw UnimplementedError();
-  }
+    ServiceCall call,
+    ServerStreamingEchoRequest request,
+  ) => throw UnsupportedError('Not used in this test');
 }

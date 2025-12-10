@@ -37,6 +37,7 @@ class ServerHandler extends ServiceCall {
   final ServerTransportStream _stream;
   final ServiceLookup _serviceLookup;
   final List<Interceptor> _interceptors;
+  final List<ServerInterceptor> _serverInterceptors;
   final CodecRegistry? _codecRegistry;
   final GrpcErrorHandler? _errorHandler;
 
@@ -83,18 +84,20 @@ class ServerHandler extends ServiceCall {
     required ServerTransportStream stream,
     required ServiceLookup serviceLookup,
     required List<Interceptor> interceptors,
+    required List<ServerInterceptor> serverInterceptors,
     required CodecRegistry? codecRegistry,
     X509Certificate? clientCertificate,
     InternetAddress? remoteAddress,
     GrpcErrorHandler? errorHandler,
     this.onDataReceived,
-  })  : _stream = stream,
-        _serviceLookup = serviceLookup,
-        _interceptors = interceptors,
-        _codecRegistry = codecRegistry,
-        _clientCertificate = clientCertificate,
-        _remoteAddress = remoteAddress,
-        _errorHandler = errorHandler;
+  }) : _stream = stream,
+       _serviceLookup = serviceLookup,
+       _interceptors = interceptors,
+       _codecRegistry = codecRegistry,
+       _clientCertificate = clientCertificate,
+       _remoteAddress = remoteAddress,
+       _errorHandler = errorHandler,
+       _serverInterceptors = serverInterceptors;
 
   @override
   DateTime? get deadline => _deadline;
@@ -239,12 +242,14 @@ class ServerHandler extends ServiceCall {
       return;
     }
 
-    _responses = _descriptor.handle(this, requests.stream);
+    _responses = _descriptor.handle(this, requests.stream, _serverInterceptors);
 
-    _responseSubscription = _responses.listen(_onResponse,
-        onError: _onResponseError,
-        onDone: _onResponseDone,
-        cancelOnError: true);
+    _responseSubscription = _responses.listen(
+      _onResponse,
+      onError: _onResponseError,
+      onDone: _onResponseDone,
+      cancelOnError: true,
+    );
     _incomingSubscription!.onData(_onDataActive);
     _incomingSubscription!.onDone(_onDoneExpected);
 
@@ -295,8 +300,9 @@ class ServerHandler extends ServiceCall {
     try {
       request = _descriptor.deserialize(data.data);
     } catch (error, trace) {
-      final grpcError =
-          GrpcError.internal('Error deserializing request: $error');
+      final grpcError = GrpcError.internal(
+        'Error deserializing request: $error',
+      );
       _sendError(grpcError, trace);
       _requests!
         ..addError(grpcError, trace)
@@ -309,7 +315,7 @@ class ServerHandler extends ServiceCall {
 
   // -- Active state, outgoing response data --
 
-  void _onResponse(response) {
+  void _onResponse(dynamic response) {
     try {
       final bytes = _descriptor.serialize(response);
       if (!_headersSent) {
@@ -333,7 +339,7 @@ class ServerHandler extends ServiceCall {
     sendTrailers();
   }
 
-  void _onResponseError(error, trace) {
+  void _onResponseError(Object error, StackTrace trace) {
     if (error is GrpcError) {
       _sendError(error, trace);
     } else {
@@ -361,8 +367,10 @@ class ServerHandler extends ServiceCall {
     _customHeaders = null;
 
     final outgoingHeaders = <Header>[];
-    outgoingHeadersMap.forEach((key, value) =>
-        outgoingHeaders.add(Header(ascii.encode(key), utf8.encode(value))));
+    outgoingHeadersMap.forEach(
+      (key, value) =>
+          outgoingHeaders.add(Header(ascii.encode(key), utf8.encode(value))),
+    );
     _stream.sendHeaders(outgoingHeaders);
     _headersSent = true;
   }
@@ -395,16 +403,19 @@ class ServerHandler extends ServiceCall {
     _customTrailers = null;
     outgoingTrailersMap['grpc-status'] = status.toString();
     if (message != null) {
-      outgoingTrailersMap['grpc-message'] =
-          Uri.encodeFull(message).replaceAll('%20', ' ');
+      outgoingTrailersMap['grpc-message'] = Uri.encodeFull(
+        message,
+      ).replaceAll('%20', ' ');
     }
     if (errorTrailers != null) {
       outgoingTrailersMap.addAll(errorTrailers);
     }
 
     final outgoingTrailers = <Header>[];
-    outgoingTrailersMap.forEach((key, value) =>
-        outgoingTrailers.add(Header(ascii.encode(key), utf8.encode(value))));
+    outgoingTrailersMap.forEach(
+      (key, value) =>
+          outgoingTrailers.add(Header(ascii.encode(key), utf8.encode(value))),
+    );
     _stream.sendHeaders(outgoingTrailers, endStream: true);
     // We're done!
     _cancelResponseSubscription();
@@ -413,7 +424,7 @@ class ServerHandler extends ServiceCall {
 
   // -- All states, incoming error / stream closed --
 
-  void _onError(error) {
+  void _onError(Object error) {
     // Exception from the incoming stream. Most likely a cancel request from the
     // client, so we treat it as such.
     _timeoutTimer?.cancel();

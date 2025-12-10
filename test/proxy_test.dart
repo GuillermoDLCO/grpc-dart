@@ -30,9 +30,9 @@ void main() {
 
   setUp(() async {
     server = Server.create(services: [FakeEchoService()]);
-    await server.serve(address: 'localhost', port: 8888);
+    await server.serve(address: 'localhost', port: 0);
 
-    final proxy = Proxy(host: 'localhost', port: 8080);
+    final proxy = Proxy(host: 'localhost', port: 0);
 
     fakeChannel = ClientChannel(
       'localhost',
@@ -68,6 +68,7 @@ class FakeEchoService extends EchoServiceBase {
 
   @override
   Stream<ServerStreamingEchoResponse> serverStreamingEcho(
-          ServiceCall call, ServerStreamingEchoRequest request) =>
-      throw UnimplementedError();
+    ServiceCall call,
+    ServerStreamingEchoRequest request,
+  ) => throw UnimplementedError();
 }

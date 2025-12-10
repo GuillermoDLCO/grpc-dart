@@ -16,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        sdk: [3.2.0, dev]
+        sdk: [stable, dev]
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
-      - uses: dart-lang/setup-dart@0a8a0fc875eb934c15d08629302413c671d3f672
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3
+      - uses: dart-lang/setup-dart@e51d8e571e22473a2ddebf0ef8a2123f0ab2c02c
         with:
           sdk: ${{ matrix.sdk }}
       - name: Report version
@@ -27,17 +27,8 @@ jobs:
       - name: Install dependencies
         run: dart pub get
       - name: Check formatting (using dev dartfmt release)
-        if: ${{ matrix.sdk == 'dev' }}
+        if: ${{ matrix.sdk == 'stable' }}
         run: dart format --output=none --set-exit-if-changed .
-      - name: Analyze code (introp and examples)
-        run: |
-          for example in interop example/*/; do
-            pushd $example
-            echo [Getting dependencies in $example]
-            dart pub get
-            popd
-          done
-        shell: bash
       - name: Analyze code
         run: dart analyze --fatal-infos .
       - name: Check that grpc-web sample builds with DDC
@@ -60,7 +51,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        sdk: [3.2.0, dev]
+        sdk: [stable, dev]
         platform: [vm, chrome]
         exclude:
           # We only run Chrome tests on Linux. No need to run them
@@ -70,8 +61,8 @@ jobs:
           - os: macos-latest
             platform: chrome
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
-      - uses: dart-lang/setup-dart@0a8a0fc875eb934c15d08629302413c671d3f672
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3
+      - uses: dart-lang/setup-dart@e51d8e571e22473a2ddebf0ef8a2123f0ab2c02c
         with:
           sdk: ${{ matrix.sdk }}
       - name: Report version
@@ -93,5 +84,5 @@ jobs:
       - name: Run tests
         run: dart test --platform ${{ matrix.platform }}
       - name: Run vmservice test
-        if: ${{ matrix.platform != 'chrome' && false }} #Disable until https://github.com/grpc/grpc-dart/issues/697 is resolved
+        if: ${{ matrix.platform != 'chrome' }}
         run: dart run --enable-vm-service --timeline-streams=Dart test/timeline_test.dart 
