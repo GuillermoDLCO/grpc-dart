@@ -415,11 +415,7 @@ class ClientCall<Q, R> implements Response {
         return;
       }
       if (_trailers.isCompleted) {
-        // Skip double trailers with grpc-status and grpc-message for Apisix
-        if (!data.metadata.containsKey('grpc-status') &&
-            data.metadata.containsKey('grpc-message')) {
-          _responseError(GrpcError.unimplemented('Received multiple trailers'));
-        }
+        _responseError(GrpcError.unimplemented('Received multiple trailers'));
         return;
       }
       final metadata = data.metadata;
