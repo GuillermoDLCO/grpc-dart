@@ -24,18 +24,18 @@ class GrpcWebClientChannel extends ClientChannelBase {
   /// The path to prefix to the URI when making requests. Omit '/' at start and end.
   final String prefixPath;
 
-  GrpcWebClientChannel.xhr(this.uri,
-      {this.prefixPath = '', super.channelShutdownHandler})
-      : assert(
-            prefixPath.isEmpty ||
-                prefixPath.isNotEmpty && !prefixPath.endsWith('/'),
-            'prefixPath must be empty or does not start and end with /');
+  GrpcWebClientChannel.xhr(
+    this.uri, {
+    this.prefixPath = '',
+    super.channelShutdownHandler,
+  }) : assert(
+         prefixPath.isEmpty ||
+             prefixPath.isNotEmpty && !prefixPath.endsWith('/'),
+         'prefixPath must be empty or does not start and end with /',
+       );
 
   @override
   ClientConnection createConnection() {
-    return XhrClientConnection(
-      uri,
-      prefixPath: prefixPath,
-    );
+    return XhrClientConnection(uri, prefixPath: prefixPath);
   }
 }
