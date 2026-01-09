@@ -258,20 +258,25 @@ void main() {
     );
   });
 
-  test('Call throws if multiple trailers are received', () async {
-    void handleRequest(_) {
-      harness
-        ..sendResponseHeader()
-        ..sendResponseTrailer(closeStream: false)
-        ..sendResponseTrailer();
-    }
+  test(
+    'Call silently ignores multiple trailers (APISIX compatibility)',
+    () async {
+      // Multiple trailers are silently ignored to handle APISIX gRPC-web proxy
+      // which may send duplicate trailers. See: https://github.com/apache/apisix/issues/12202
+      void handleRequest(_) {
+        harness
+          ..sendResponseHeader()
+          ..sendResponseTrailer(closeStream: false)
+          ..sendResponseTrailer();
+      }
 
-    await harness.runFailureTest(
-      clientCall: harness.client.unary(dummyValue),
-      expectedException: GrpcError.unimplemented('Received multiple trailers'),
-      serverHandlers: [handleRequest],
-    );
-  });
+      await harness.runFailureTest(
+        clientCall: harness.client.unary(dummyValue),
+        expectedException: GrpcError.unimplemented('No responses received'),
+        serverHandlers: [handleRequest],
+      );
+    },
+  );
 
   test('Call throws if non-zero status is received', () async {
     const customStatusCode = 17;

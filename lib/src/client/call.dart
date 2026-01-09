@@ -415,7 +415,10 @@ class ClientCall<Q, R> implements Response {
         return;
       }
       if (_trailers.isCompleted) {
-        _responseError(GrpcError.unimplemented('Received multiple trailers'));
+        // APISIX gRPC-web proxy may send duplicate trailers when upstream returns
+        // an error with empty body. Silently ignore duplicate trailers to maintain
+        // compatibility with APISIX's behavior.
+        // See: https://github.com/apache/apisix/issues/12202
         return;
       }
       final metadata = data.metadata;
@@ -423,6 +426,21 @@ class ClientCall<Q, R> implements Response {
         'Metadata received',
         arguments: {'trailers': metadata.toString()},
       );
+
+      // APISIX workaround: If the body trailers contain APISIX's synthetic error
+      // "upstream grpc status not received", check if the HTTP headers contain
+      // the real grpc-status from upstream and prefer those instead.
+      // See: https://github.com/apache/apisix/issues/12202
+      final grpcMessage = metadata['grpc-message'] ?? '';
+      if (grpcMessage.contains('upstream') &&
+          _headerMetadata.containsKey('grpc-status')) {
+        // Use header metadata as trailers (Trailers-Only style) since it
+        // contains the real upstream grpc-status
+        _trailers.complete(_headerMetadata);
+        _checkForErrorStatus(_headerMetadata);
+        return;
+      }
+
       _trailers.complete(metadata);
 
       /// Process status error if necessary
